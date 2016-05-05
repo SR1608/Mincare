@@ -1,0 +1,172 @@
+
+Timeseriesmin <- read.csv("D:/Ashiva/POC/Mining/Timeseriesmin.csv")
+
+Tmincare=Timeseriesmin[complete.cases(Timeseriesmin), ]
+
+Dumpsite <- read.csv("D:/Ashiva/POC/Mining/Set2/Dumpsite.csv")
+
+Dclean=Tmincare
+
+
+for(i in 1:nrow(Dclean))
+{Dclean$serial[i]=i
+}
+
+Dclean$time <- strptime(Dclean$TimeSeries, "%Y-%m-%d %H:%M:%S")
+
+Dclean$sec<- as.numeric(format(Dclean$time, "%H"))*60*60 +
+    as.numeric(format(Dclean$time, "%M"))*60+as.numeric (format(Dclean$time,"%S"))
+
+Dclean$diffintruckspeed=0
+for(i in 2:nrow(Dclean)){Dclean$diffintruckspeed[i]=Dclean$TruckSpeed[i]-Dclean$TruckSpeed[i-1]}
+
+Dclean$eventtime=0
+for(i in 2:nrow(Dclean)){Dclean$eventtime[i]=Dclean$sec[i]-Dclean$sec[i-1]}
+
+for(i in 1:nrow(Dclean)){if(Dclean$BodyDown[i]==0.5 & Dclean$BodyDown[i+1]==0){Dclean$BodyDown[i]=0}}
+
+Dclean$serialdiff=1
+Dclean$Group=0
+
+Train=subset(Dclean,Dclean$BodyDown==0|Dclean$BodyDown==0.5)
+
+Train$serialdiff=0
+for(i in 2:nrow(Train)) {Train$serialdiff[i]=Train$serial[i]-Train$serial[i-1]}
+Train$serialdiff[1]=1
+
+Train$Group=1
+for(i in 2:nrow(Train))
+{
+    if(Train$serialdiff[i] > 50){
+        Train$Group[i]=Train$Group[i-1]+1
+    } else
+        Train$Group[i]=Train$Group[i-1]
+}
+
+max=Train$Group[nrow(Train)]
+
+Beacon <- read.csv("D:/Ashiva/POC/Mining/Set2/Beacon.csv")
+Beacon$time <- strptime(Beacon$TimeSeries, "%Y-%m-%d %H:%M:%S")
+
+
+for(i in 1:max){
+    file_name<-paste("Dumpgroup",i,sep = "")
+    file_name2<-paste("SpotDumpend",i,sep = "")
+	file_name4<-paste("SpotDump",i,sep = "")
+	file_name5<-paste("SpotDumpRev",i,sep = "")
+	file_name6<-paste("SpotDumpBrake",i,sep = "")
+	file_name7<-paste("SpotDumpforw",i,sep = "")
+	file_name8<-paste("SpotDumpdeacc",i,sep = "")
+    lower_tray<-paste("Lower",i,sep = "")
+    lift_empty<-paste("Lift",i,sep = "")
+    durlower_tray<-paste("durlowertray",i,sep = "")
+    durlift_empty<-paste("durliftempty",i,sep = "")
+    durtransition<-paste("durtransition",i,sep = "")
+    transition<-paste("Transition",i,sep = "")
+    
+    test1=subset(Train,Train$Group == i)
+    test2=rbind(test1,Dclean[test1$serial[nrow(test1)]+1,])
+    
+    test3=subset(test2,test2$BodyDown==0)
+    
+    lowertray=subset(test2,test2$BodyDown==1 | test2$BodyDown==0.5)
+    durlowertray=sum(lowertray$eventtime)
+    
+    lifttray=subset(test3,test3$BrakesOn == 1&test3$Forward == 0&test3$Reverse == 0)
+    durlift_tray=sum(lifttray$eventtime)
+    
+    trans=subset(test3,test3$BrakesOn == 0|test3$BrakesOn == 0.5|test3$Forward == 1)
+    durtrans=sum(trans$eventtime)
+    
+    ##SpotDumpend
+    SDend=test2$serial[1]-1
+    
+    for(j in 1:nrow(Dclean)){
+    if(Beacon$time[i]==Dclean$time[j]){
+    file_name3<-paste("SpotDumpstr",i,sep = "")
+    SDstart=j
+    #assign(file_name3,SDstart)
+		}
+    }
+    
+    SpotDump=Dclean[SDstart:SDend,]
+    
+    
+    SpotDumpRev=subset(SpotDump,SpotDump$Reverse==1 & SpotDump$BrakesOn!=1)
+    SpotDumpRevstr=SpotDumpRev$serial[1]
+    SpotDumpA2=Dclean[SpotDumpRevstr:SDend,]
+    
+	SDRevend=SpotDumpRev$serial[nrow(SpotDumpRev)]+1
+	SpotDumpafterRev=Dclean[SDRevend:SDend,]
+    #SpotDumpafterRev=subset(SpotDumpA2,SpotDumpA2$Reverse!=1&)
+    SpotDumpBrake=subset(SpotDumpafterRev,SpotDumpafterRev$BrakesOn==1)
+    
+    SpotDumpA2transition=subset(SpotDumpafterRev,SpotDumpafterRev$BrakesOn!=1)
+    d=SpotDumpRevstr-1
+    SpotDumpA1=Dclean[SDstart:d,]
+  	
+
+	#assign(file_name5,SpotDumpRev)
+	
+    
+    add=0
+    for(k in 1:nrow(SpotDumpA1)){
+    add1=sum(SpotDumpA1$diffintruckspeed[k:nrow(SpotDumpA1)])
+    if(add1<add){
+	add=add1
+    save=k}
+    }
+    b=save-1
+    SpotDumpforw=SpotDumpA1[1:b,]
+	d=nrow(SpotDumpA1)
+    SpotDumpdeacc=SpotDumpA1[save:d,]
+	#assign(file_name7,SpotDumpforw)
+	
+	#assign(file_name8,SpotDumpdeacc)
+    durSDforw=sum(SpotDumpforw$eventtime)
+	durSDdeacc=sum(SpotDumpdeacc$eventtime)
+    durSDrev=sum(SpotDumpRev$eventtime)
+	durSDbrake=sum(SpotDumpBrake$eventtime)
+	durSDtrans=sum(SpotDumpA2transition$eventtime)
+	
+	
+    Dumpsite$Serial[i]=i
+	#Dumpsite$Start_SpotDumpforward[i]=lowertray$TimeSeries[i]
+    #Dumpsite$End_SpotDumforward[i]=
+    Dumpsite$Dur_SpotDumpforward[i]=durSDforw
+	#Dumpsite$Start_SpotDumpdeaccelerate[i]=lowertray$TimeSeries[i]
+    #Dumpsite$End_SpotDumpdeaccelerate[i]=
+    Dumpsite$Dur_SpotDumpdeaccelerate[i]=durSDdeacc
+	#Dumpsite$Start_SpotDumpReverse[i]=lowertray$TimeSeries[i]
+    #Dumpsite$End_SpotDumpReverse[i]=
+    Dumpsite$Dur_SpotDumpReverse[i]=durSDrev
+	#Dumpsite$Start_SpotDumpBrake[i]=lowertray$TimeSeries[i]
+    #Dumpsite$End_SpotDumpBrake[i]=
+    Dumpsite$Dur_SpotDumpBrake[i]=durSDbrake
+	#DumpsiteStart_SpotDumpTransition[i]=lowertray$TimeSeries[i]
+    #Dumpsite$End_SpotDumpTransition[i]=
+    Dumpsite$Dur_SpotDumpTransition[i]=durSDtrans
+    #Dumpsite$Start_lifttray[i]=lifttray$time[i]
+    #Dumpsite$End_lifttray[i]=
+    Dumpsite$Dur_SDlifttray[i]=durlift_tray
+    #Dumpsite$Start_transition[i]=trans$TimeSeries[i]
+    #Dumpsite$End_transition[i]=
+    Dumpsite$Dur_SDtransition[i]=durtrans
+    #Dumpsite$Start_lowertray[i]=lowertray$TimeSeries[i]
+    #Dumpsite$End_lowertray[i]=
+    Dumpsite$Dur_SDlowertray[i]=durlowertray
+	
+	
+	
+    #assign(file_name,test2)
+    #assign(lower_tray,lowertray)
+    #assign(lift_empty,lifttray)
+    #assign(transition,trans)
+    #assign(durlower_tray,durlowertray)
+    #assign(durlift_empty,durlift_tray)
+    #assign(durtransition,durtrans)
+    #assign(file_name2,SDend)
+	#assign(file_name4,SpotDump)
+	#assign(file_name5,SpotDumpRev)
+	#assign(file_name6,SpotDumpBrake)
+}
